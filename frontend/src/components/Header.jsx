@@ -1,26 +1,26 @@
 import React from "react";
-import { Sun, Moon, RefreshCw, Menu, X, FlaskConical } from "lucide-react";
+import { Sun, Moon, RefreshCw, Menu, X } from "lucide-react";
 
 function ConnectionBadge({ connection, isDemo }) {
   if (isDemo) {
     return (
-      <div className="status-badge demo" title="Demo mode — no real sensor data">
+      <div className="status-badge demo" title="Demo mode — simulated data only">
         <span className="status-dot" />
-        DEMO MODE
+        Demo Mode
       </div>
     );
   }
 
   const isConnected = connection === "CONNECTED";
-  const isError = connection === "ERROR";
+  const isError     = connection === "ERROR";
 
   return (
     <div
       className={`status-badge ${isConnected ? "connected" : isError ? "error" : "connecting"}`}
-      title={isConnected ? "ThingSpeak data received" : "Waiting for ThingSpeak data"}
+      title={isConnected ? "Live ThingSpeak data" : "Waiting for data"}
     >
       <span className={`status-dot ${isConnected ? "pulse" : ""}`} />
-      {isConnected ? "THINGSPEAK LIVE" : isError ? "CONNECTION ERROR" : (connection || "CONNECTING")}
+      {isConnected ? "Live" : isError ? "Error" : connection || "Connecting…"}
     </div>
   );
 }
@@ -47,17 +47,24 @@ export default function Header({
         style={{ display: "none" }}
         id="hamburger-btn"
       >
-        {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
+        {sidebarOpen ? <X size={16} /> : <Menu size={16} />}
       </button>
 
       <a className="header-brand" href="#" onClick={e => e.preventDefault()} aria-label="AquaSense home">
         <div className="header-logo" aria-hidden="true">💧</div>
-        <span className="header-brand-name">AquaSense</span>
+        <div>
+          <span className="header-brand-name">AquaSense</span>
+          <span className="header-brand-sub">Smart Water Quality Monitoring</span>
+        </div>
       </a>
 
       {lastUpdate && (
-        <span className="text-xs text-muted" style={{ display: "none" }} id="last-update-header">
-          Updated: {lastUpdate}
+        <span
+          className="text-xs text-muted"
+          style={{ display: "none", marginLeft: 8, fontFamily: "JetBrains Mono, monospace" }}
+          id="last-update-header"
+        >
+          {lastUpdate}
         </span>
       )}
 
@@ -73,7 +80,6 @@ export default function Header({
           title={demoMode ? "Exit demo mode" : "Enable demo mode (simulated data)"}
           aria-pressed={demoMode}
         >
-          <FlaskConical size={14} />
           {demoMode ? "Exit Demo" : "Demo"}
         </button>
 
@@ -82,10 +88,10 @@ export default function Header({
           className="icon-btn"
           onClick={onRefresh}
           disabled={refreshing}
-          aria-label="Refresh data now"
+          aria-label="Refresh data"
           title="Manual refresh"
         >
-          <RefreshCw size={16} style={{ animation: refreshing ? "spin 1s linear infinite" : "none" }} />
+          <RefreshCw size={14} style={{ animation: refreshing ? "aq-spin 0.8s linear infinite" : "none" }} />
         </button>
 
         <button
@@ -95,12 +101,12 @@ export default function Header({
           aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
           title="Toggle theme"
         >
-          {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+          {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
         </button>
       </div>
 
       <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes aq-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @media (max-width: 800px) {
           #hamburger-btn { display: grid !important; }
           #last-update-header { display: block !important; }

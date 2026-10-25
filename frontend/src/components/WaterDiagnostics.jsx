@@ -1,6 +1,5 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useMemo } from "react";
 import {
-  ShieldAlert,
   ShieldCheck,
   AlertTriangle,
   CheckCircle2,
@@ -8,462 +7,346 @@ import {
   Droplets,
   Zap,
   Thermometer,
-  BookOpen,
   Filter,
-  RefreshCw,
-  Lightbulb
+  Info,
 } from "lucide-react";
 import { fmt } from "../utils/helpers";
 
-/**
- * Coherent, paired diagnostic scenarios.
- * Each scenario bundles ONE exact cause, ONE matched solution, and ONE matched preventive measure.
- */
-export const TARGETED_SCENARIOS = {
-  ph_low: [
-    {
-      id: "ph_low_pipes",
-      title: "Metallic Pipework Leaching & Internal Corrosion",
-      source: "Aging galvanized iron or copper distribution pipes corroding due to acidic standing water.",
-      impact: "Pinhole pipe leaks, bitter metallic taste, and hazardous heavy metal (lead, copper) leaching into drinking water.",
-      solution: "Immediately dose food-grade Sodium Bicarbonate (baking soda, 60–80 mg/L) into the feed stream to elevate pH above 6.8, and flush all stagnant line dead-ends.",
-      prevention: "Replace degrading metal distribution lines with NSF/ANSI-61 certified Schedule 80 PVC, CPVC, or cross-linked polyethylene (PEX) piping."
-    },
-    {
-      id: "ph_low_peat",
-      title: "Acid Rain Runoff & Decomposing Peat Ingress",
-      source: "Atmospheric acid precipitation or forest organic decomposition leaching humic and fulvic acids into the intake catchment.",
-      impact: "Depressed buffering capacity, tea-colored tint, and accelerated degradation of metallic pump components.",
-      solution: "Route raw intake water through a sacrificial Calcite (calcium carbonate) or Corosex (magnesium oxide) neutralizing filter bed.",
-      prevention: "Construct crushed limestone riprap buffer zones along upstream catchment drainage ditches to passively neutralize acidic runoff."
-    },
-    {
-      id: "ph_low_effluent",
-      title: "Industrial Acid Washdown or Mine Drainage Seepage",
-      source: "Chemical rinse effluent, battery acid runoff, or industrial acid washdown infiltrating shallow groundwater near the source.",
-      impact: "Severe chemical corrosion of fittings and immediate toxicity hazard to humans and livestock.",
-      solution: "Immediately halt primary intake pumps, switch to reserve storage, and initiate air-sparging aeration combined with automated soda ash injection.",
-      prevention: "Establish physical concrete containment berms and configure an automated solenoid emergency shutoff switch triggered when pH drops below 5.5."
-    }
-  ],
+/* ──────────────────────────────────────────────────────────────
+   Recommendation generator
+   All logic is derived from actual sensor values and configured
+   thresholds — no fabricated causes or chemical dosing quantities.
+   ────────────────────────────────────────────────────────────── */
 
-  ph_high: [
-    {
-      id: "ph_high_algae",
-      title: "Cyanobacteria & Algal Photosynthetic Bloom",
-      source: "Microscopic algae and cyanobacteria consuming dissolved carbon dioxide during peak daytime sunlight, driving pH rapidly upward.",
-      impact: "Soapy alkaline taste, skin irritation, and severe impairment of chlorine and UV disinfection efficacy.",
-      solution: "Immediately cover storage cistern to starve algae of sunlight, and dose low-concentration Alum (aluminum sulfate) coagulation to precipitate algal cells.",
-      prevention: "Install heavy-duty, UV-resistant light-blocking covers and 0.5mm stainless steel insect/debris mesh on all cistern vents and inspection hatches."
-    },
-    {
-      id: "ph_high_mineral",
-      title: "Subterranean Limestone / Alkaline Bedrock Seepage",
-      source: "Raw water percolation through natural dolomite, limestone, and calcium carbonate subterranean aquifers.",
-      impact: "Heavy scale encrustation in water heaters, boiler tubes, showerheads, and pump impellers.",
-      solution: "Inject controlled dilute food-grade citric acid (or weak food-grade hydrochloric acid) via a metering pump to restore pH to the 7.2–7.6 target range.",
-      prevention: "Construct drainage diversion swales to channel heavily mineralized surface runoff away from the primary wellhead."
-    },
-    {
-      id: "ph_high_concrete",
-      title: "Cementitious Leaching from Unsealed Concrete Tank",
-      source: "Uncarbonated calcium hydroxide leaching from newly poured, uncured, or unsealed concrete holding cistern walls.",
-      impact: "High alkalinity spikes and bitter, astringent taste with a slimy surface water tactile feel.",
-      solution: "Sparge compressed carbon dioxide gas into the holding reservoir to carbonate free alkali, followed by a complete freshwater flush.",
-      prevention: "Apply a potable-water certified 2-part food-grade epoxy barrier coating to all concrete cistern interiors before filling."
-    }
-  ],
+function buildRecommendations(latest, thresholds) {
+  if (!latest) return [];
 
-  turbidity: [
-    {
-      id: "turb_stormwater",
-      title: "Torrential Stormwater Runoff & Topsoil Erosion",
-      source: "Heavy rainfall washing loose colloidal clay, silt, and sand into the raw water collection intake.",
-      impact: "Murky, cloudy water that shields pathogenic bacteria, viruses, and microbial cysts from UV sterilization and chlorination.",
-      solution: "Dose Alum (aluminum sulfate) or organic Moringa oleifera seed extract at 25 mg/L to bind micro-particles into flocs, followed by 90 minutes quiescent settling in a sediment basin.",
-      prevention: "Plant dense vetiver grass and native riparian vegetation buffer strips along catchment edges to naturally intercept and filter sediment runoff."
-    },
-    {
-      id: "turb_pump",
-      title: "Suction Strainer Bottom Sediment Resuspension",
-      source: "Intake pump suction velocity stirring up settled silt from placing the intake strainer too close to the reservoir sludge floor.",
-      impact: "Rapidly clogs fine cartridge filters, abrades pump mechanical seals, and causes turbid discharge surges.",
-      solution: "Throttle pump discharge flow by 30% and switch filtration stream to the secondary multi-media sand/anthracite depth filter.",
-      prevention: "Elevate the intake foot-valve and strainer at least 0.5 meters above the reservoir bed, or convert to a floating surface intake."
-    },
-    {
-      id: "turb_organic",
-      title: "Agricultural Manure & Livestock Inflow Contamination",
-      source: "Surface wash from nearby livestock paddocks or agricultural compost piles carrying suspended organic particulates.",
-      impact: "Severe biological contamination risk, coliform bacterial spikes, and elevated organic disinfection byproducts.",
-      solution: "Direct water through a 5-micron spun polypropylene cartridge followed by a 1-micron polished block, followed by shock chlorination or UV treatment.",
-      prevention: "Erect a 20-meter sanitary exclusion fence and watertight diversion curbs around the perimeter of the collection wellhead."
-    }
-  ],
+  const t = thresholds || {};
+  const phLow    = t.ph_low    ?? 5.5;
+  const phHigh   = t.ph_high   ?? 8.5;
+  const turbLimit = t.turbidity ?? 12.0;
+  const ecLimit  = t.ec        ?? 800.0;
 
-  ec: [
-    {
-      id: "ec_fertilizer",
-      title: "Agricultural Fertilizer Nutrient Runoff & Leaching",
-      source: "Excessive dissolved nitrate, phosphate, and potassium salts percolating from over-fertilized surrounding agricultural lands.",
-      impact: "High salinity, root burn in crops, and health risks from elevated nitrate ingestion (methemoglobinemia).",
-      solution: "Route stream through a high-pressure Reverse Osmosis (RO) membrane system to reject 95–99% of dissolved ionic mineral salts.",
-      prevention: "Coordinate precision split-fertilizer application schedules with local growers and construct perimeter retention swales to intercept agricultural percolation."
-    },
-    {
-      id: "ec_saline",
-      title: "Aquifer Saltwater Intrusion from Over-Pumping",
-      source: "Excessive extraction rates drawing marine or brackish water into shallow coastal freshwater aquifer layers.",
-      impact: "Salty, brackish taste, severe mineral hardness, and accelerated galvanic corrosion of hot water equipment.",
-      solution: "Blend high-EC borehole water 1:1 with collected low-conductivity rainwater (EC < 80 µS/cm) to dilute conductivity below 500 µS/cm.",
-      prevention: "Curtail daily continuous pumping hours to reduce cone of depression, and install piezometer monitoring wells to track saline interface levels."
-    },
-    {
-      id: "ec_minerals",
-      title: "Subsurface Gypsum & Rock Mineral Dissolution",
-      source: "Natural dissolution of subterranean gypsum, rock salt, and calcium sulfate rock formations along the water table.",
-      impact: "High Total Dissolved Solids (TDS), soap scum formation, and crusty white mineral rings on sanitary fixtures.",
-      solution: "Install an automated strong-acid cation (SAC) ion-exchange water softener regenerated with food-grade sodium chloride brine.",
-      prevention: "Extend and pressure-grout sanitary well casing to seal out mineralized upper strata and draw from deeper, cleaner freshwater layers."
-    }
-  ],
+  const ph   = typeof latest.ph          === "number" ? latest.ph          : null;
+  const turb = typeof latest.turbidity   === "number" ? latest.turbidity   : null;
+  const ec   = typeof latest.ec          === "number" ? latest.ec          : null;
+  const temp = typeof latest.temperature === "number" ? latest.temperature : null;
 
-  temperature: [
-    {
-      id: "temp_pipe",
-      title: "Direct Solar Heating of Above-Ground HDPE Piping",
-      source: "Unshaded black plastic conveyance pipes running exposed along the ground absorbing direct midday solar irradiance.",
-      impact: "Drastically lowers dissolved oxygen (DO) saturation capacity and accelerates biofilm and Legionella growth in distribution lines.",
-      solution: "Wrap all exposed pipe runs with reflective aluminum-backed elastomeric thermal insulation foam jackets.",
-      prevention: "Trench and bury all primary water conveyance pipelines at least 0.6–0.8 meters underground below the solar heating layer."
-    },
-    {
-      id: "temp_tank",
-      title: "Shallow Unshaded Cistern Thermal Absorption",
-      source: "Uninsulated, dark-colored holding tanks sitting under direct tropical sunlight without overhead shade.",
-      impact: "Accelerated chemical reaction rates, rapid chlorine disinfectant decay, and stale lukewarm discharge.",
-      solution: "Engage cascade fountain aeration or diffused micro-bubble aerator to induce evaporative cooling and restore dissolved oxygen levels.",
-      prevention: "Erect high-density 80% UV shade cloth canopies over storage tanks and coat tank exteriors with high-albedo solar-reflective white paint."
-    }
-  ]
+  const recs = [];
+
+  // pH violations
+  if (ph !== null && ph < phLow) {
+    recs.push({
+      id: "ph-low",
+      priority: "critical",
+      icon: Droplets,
+      title: "pH Below Configured Minimum",
+      subtitle: `Measured: ${fmt(ph, 2)} pH — Limit: ≥ ${phLow} pH`,
+      body: `The current pH reading (${fmt(ph, 2)}) is below the configured lower limit of ${phLow}. This indicates acidic conditions that exceed the project alarm threshold.`,
+      steps: [
+        "Verify the pH sensor is properly calibrated using a standard buffer solution.",
+        "Confirm the reading is stable and not a transient spike.",
+        "Re-test the water sample after confirming sensor calibration.",
+        "If the reading persists, investigate the water source for potential acid contamination.",
+      ],
+      rationale: `pH ${fmt(ph, 2)} is below the configured lower limit of ${phLow}.`,
+    });
+  } else if (ph !== null && ph > phHigh) {
+    recs.push({
+      id: "ph-high",
+      priority: "critical",
+      icon: Droplets,
+      title: "pH Above Configured Maximum",
+      subtitle: `Measured: ${fmt(ph, 2)} pH — Limit: ≤ ${phHigh} pH`,
+      body: `The current pH reading (${fmt(ph, 2)}) exceeds the configured upper limit of ${phHigh}. This indicates alkaline conditions that exceed the project alarm threshold.`,
+      steps: [
+        "Verify the pH sensor calibration using a standard buffer solution.",
+        "Confirm the reading is stable before taking further action.",
+        "Re-test after confirming sensor calibration.",
+        "If the reading persists, investigate the water source for possible alkaline contamination.",
+      ],
+      rationale: `pH ${fmt(ph, 2)} exceeds the configured upper limit of ${phHigh}.`,
+    });
+  }
+
+  // Turbidity
+  if (turb !== null && turb > turbLimit) {
+    recs.push({
+      id: "turbidity-high",
+      priority: "attention",
+      icon: Filter,
+      title: "Turbidity Exceeds Configured Limit",
+      subtitle: `Measured: ${fmt(turb, 1)} NTU — Limit: ≤ ${turbLimit} NTU`,
+      body: `Turbidity (${fmt(turb, 1)} NTU) is above the configured threshold of ${turbLimit} NTU. High turbidity may indicate suspended particles in the water. Elevated turbidity can interfere with disinfection processes.`,
+      steps: [
+        "Inspect the turbidity sensor for fouling or incorrect positioning.",
+        "Check the water source for visible cloudiness or disturbance.",
+        "Re-take the measurement after allowing the sensor to stabilize.",
+        "Investigate possible causes such as sediment stir-up or a change in the source water.",
+      ],
+      rationale: `Turbidity ${fmt(turb, 1)} NTU exceeds the configured limit of ${turbLimit} NTU.`,
+    });
+  }
+
+  // EC
+  if (ec !== null && ec > ecLimit) {
+    recs.push({
+      id: "ec-high",
+      priority: "attention",
+      icon: Zap,
+      title: "Electrical Conductivity Exceeds Configured Limit",
+      subtitle: `Measured: ${fmt(ec, 0)} µS/cm — Limit: ≤ ${ecLimit} µS/cm`,
+      body: `EC (${fmt(ec, 0)} µS/cm) exceeds the configured threshold of ${ecLimit} µS/cm. This may indicate elevated dissolved solids in the water. Sensor calibration should be verified before drawing conclusions.`,
+      steps: [
+        "Verify the EC sensor calibration using a reference solution.",
+        "Confirm the reading with a secondary measurement if available.",
+        "Check for any recent changes in the water source that could affect ion concentration.",
+        "If calibration is confirmed correct, investigate potential sources of dissolved ions in the water supply.",
+      ],
+      rationale: `EC ${fmt(ec, 0)} µS/cm exceeds the configured limit of ${ecLimit} µS/cm.`,
+    });
+  }
+
+  // Temperature advisory (informational only — no alarm configured)
+  if (temp !== null && temp > 30) {
+    recs.push({
+      id: "temp-elevated",
+      priority: "informational",
+      icon: Thermometer,
+      title: "Elevated Temperature — Informational",
+      subtitle: `Measured: ${fmt(temp, 1)} °C — No alarm threshold configured`,
+      body: `The measured temperature (${fmt(temp, 1)} °C) is elevated. No alarm threshold is configured for temperature in this project. This advisory is provided for informational context only.`,
+      steps: [
+        "Monitor temperature trends over time.",
+        "No immediate action is required as no threshold is configured.",
+        "Consider whether elevated temperatures are relevant to the operational context being monitored.",
+      ],
+      rationale: `Temperature of ${fmt(temp, 1)} °C is above 30 °C. No project alarm threshold is active for temperature.`,
+    });
+  }
+
+  return recs;
+}
+
+/* ──────────────────────────────────────────────────────────
+   Priority display helpers
+   ────────────────────────────────────────────────────────── */
+
+const PRIORITY_CONFIG = {
+  critical:      { label: "Critical",           badgeClass: "critical",     cardClass: "critical-card" },
+  attention:     { label: "Attention Required",  badgeClass: "attention",    cardClass: "attention-card" },
+  informational: { label: "Informational",       badgeClass: "informational", cardClass: "info-card" },
 };
 
-export default function WaterDiagnostics({ latest, thresholds, fullView = false }) {
-  // Scenario selector indices for each condition (allows clicking "Re-diagnose" to get another scenario)
-  const [scenarioOffsets, setScenarioOffsets] = useState({
-    ph_low: 0,
-    ph_high: 0,
-    turbidity: 0,
-    ec: 0,
-    temperature: 0
-  });
+const PRIORITY_ORDER = { critical: 0, attention: 1, informational: 2 };
 
-  // Cycle to next scenario for a specific parameter
-  const cycleScenario = (conditionKey) => {
-    setScenarioOffsets(prev => ({
-      ...prev,
-      [conditionKey]: (prev[conditionKey] + 1) % (TARGETED_SCENARIOS[conditionKey]?.length || 1)
-    }));
-  };
+/* ──────────────────────────────────────────────────────────
+   Component
+   ────────────────────────────────────────────────────────── */
 
-  // Evaluate active issues from latest telemetry
-  const activeIssues = useMemo(() => {
-    if (!latest) return [];
-    const issues = [];
-    const phLow = thresholds?.ph_low ?? 5.5;
-    const phHigh = thresholds?.ph_high ?? 8.5;
-    const turbLimit = thresholds?.turbidity ?? 12.0;
-    const ecLimit = thresholds?.ec ?? 800.0;
+export default function WaterDiagnostics({ latest, thresholds }) {
+  const recommendations = useMemo(
+    () => buildRecommendations(latest, thresholds)
+            .sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]),
+    [latest, thresholds]
+  );
 
-    const ph = typeof latest.ph === "number" ? latest.ph : null;
-    const turb = typeof latest.turbidity === "number" ? latest.turbidity : null;
-    const ec = typeof latest.ec === "number" ? latest.ec : null;
-    const temp = typeof latest.temperature === "number" ? latest.temperature : null;
+  const hasIssues = recommendations.some(r => r.priority !== "informational");
+  const criticalCount = recommendations.filter(r => r.priority === "critical").length;
 
-    if (ph !== null && ph < phLow) {
-      const scenarios = TARGETED_SCENARIOS.ph_low;
-      const idx = scenarioOffsets.ph_low % scenarios.length;
-      issues.push({
-        conditionKey: "ph_low",
-        paramName: "pH",
-        currentValue: `${fmt(ph, 2)}`,
-        limitStr: `< ${phLow}`,
-        severity: "critical",
-        icon: Droplets,
-        color: "var(--red)",
-        scenario: scenarios[idx],
-        totalScenarios: scenarios.length,
-        currentIndex: idx + 1
-      });
-    } else if (ph !== null && ph > phHigh) {
-      const scenarios = TARGETED_SCENARIOS.ph_high;
-      const idx = scenarioOffsets.ph_high % scenarios.length;
-      issues.push({
-        conditionKey: "ph_high",
-        paramName: "pH",
-        currentValue: `${fmt(ph, 2)}`,
-        limitStr: `> ${phHigh}`,
-        severity: "critical",
-        icon: Droplets,
-        color: "var(--amber)",
-        scenario: scenarios[idx],
-        totalScenarios: scenarios.length,
-        currentIndex: idx + 1
-      });
-    }
-
-    if (turb !== null && turb > turbLimit) {
-      const scenarios = TARGETED_SCENARIOS.turbidity;
-      const idx = scenarioOffsets.turbidity % scenarios.length;
-      issues.push({
-        conditionKey: "turbidity",
-        paramName: "Turbidity",
-        currentValue: `${fmt(turb, 1)} NTU`,
-        limitStr: `> ${turbLimit} NTU`,
-        severity: "critical",
-        icon: Filter,
-        color: "var(--amber)",
-        scenario: scenarios[idx],
-        totalScenarios: scenarios.length,
-        currentIndex: idx + 1
-      });
-    }
-
-    if (ec !== null && ec > ecLimit) {
-      const scenarios = TARGETED_SCENARIOS.ec;
-      const idx = scenarioOffsets.ec % scenarios.length;
-      issues.push({
-        conditionKey: "ec",
-        paramName: "Electrical Conductivity",
-        currentValue: `${fmt(ec, 0)} µS/cm`,
-        limitStr: `> ${ecLimit} µS/cm`,
-        severity: "warning",
-        icon: Zap,
-        color: "var(--purple)",
-        scenario: scenarios[idx],
-        totalScenarios: scenarios.length,
-        currentIndex: idx + 1
-      });
-    }
-
-    if (temp !== null && temp > 30.0) {
-      const scenarios = TARGETED_SCENARIOS.temperature;
-      const idx = scenarioOffsets.temperature % scenarios.length;
-      issues.push({
-        conditionKey: "temperature",
-        paramName: "Temperature",
-        currentValue: `${fmt(temp, 1)} °C`,
-        limitStr: `> 30.0 °C`,
-        severity: "warning",
-        icon: Thermometer,
-        color: "var(--cyan)",
-        scenario: scenarios[idx],
-        totalScenarios: scenarios.length,
-        currentIndex: idx + 1
-      });
-    }
-
-    return issues;
-  }, [latest, thresholds, scenarioOffsets]);
-
-  const hasActiveIssues = activeIssues.length > 0;
+  // Assessment summary metrics
+  const t = thresholds || {};
+  const summaryMetrics = latest ? [
+    {
+      label: "pH",
+      value: latest.ph != null ? `${fmt(latest.ph, 2)} pH` : "--",
+      limit: `${t.ph_low ?? "?"} – ${t.ph_high ?? "?"} pH`,
+      failed: latest.ph != null && (latest.ph < (t.ph_low ?? 5.5) || latest.ph > (t.ph_high ?? 8.5)),
+    },
+    {
+      label: "Turbidity",
+      value: latest.turbidity != null ? `${fmt(latest.turbidity, 1)} NTU` : "--",
+      limit: `≤ ${t.turbidity ?? "?"}  NTU`,
+      failed: latest.turbidity != null && latest.turbidity > (t.turbidity ?? 12),
+    },
+    {
+      label: "EC",
+      value: latest.ec != null ? `${fmt(latest.ec, 0)} µS/cm` : "--",
+      limit: `≤ ${t.ec ?? "?"} µS/cm`,
+      failed: latest.ec != null && latest.ec > (t.ec ?? 800),
+    },
+    {
+      label: "Temperature",
+      value: latest.temperature != null ? `${fmt(latest.temperature, 1)} °C` : "--",
+      limit: "No alarm",
+      failed: false,
+    },
+  ] : [];
 
   return (
-    <div className="card" style={{ marginBottom: 24 }}>
+    <div className="card" style={{ marginBottom: 20 }}>
       {/* Card Header */}
-      <div className="card-header" style={{ marginBottom: 16 }}>
+      <div className="card-header" style={{ marginBottom: 14 }}>
         <div>
-          <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Wrench size={18} color="var(--accent)" />
-            Targeted Water Quality Remediation & Advisory
+          <div className="card-title">
+            <Wrench size={15} style={{ color: "var(--brand)" }} />
+            Recommended Actions
           </div>
           <div className="card-subtitle">
-            Dynamic cause identification, matched corrective action, and targeted preventive measure for current readings
+            Derived from current sensor readings and configured thresholds
           </div>
         </div>
 
-        {hasActiveIssues ? (
-          <span className="status-badge error" style={{ fontSize: 11 }}>
-            <AlertTriangle size={12} /> {activeIssues.length} Active Concern{activeIssues.length > 1 ? "s" : ""}
+        {hasIssues ? (
+          <span
+            className={`priority-badge ${criticalCount > 0 ? "critical" : "attention"}`}
+          >
+            <AlertTriangle size={10} />
+            {criticalCount > 0
+              ? `${criticalCount} Critical`
+              : `${recommendations.filter(r => r.priority === "attention").length} Attention`}
           </span>
         ) : (
-          <span className="status-badge ok" style={{ fontSize: 11 }}>
-            <CheckCircle2 size={12} /> All Parameters In Safe Range
+          <span className="priority-badge informational">
+            <CheckCircle2 size={10} />
+            {latest ? "All Thresholds Met" : "No Data"}
           </span>
         )}
       </div>
 
-      {/* SECTION 1: DYNAMIC SPECIFIC SCENARIO FOR CURRENT READINGS */}
-      {hasActiveIssues ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 20 }}>
-          {activeIssues.map((issue) => {
-            const Icon = issue.icon;
-            const sc = issue.scenario;
-
-            return (
-              <div
-                key={issue.conditionKey}
-                style={{
-                  background: "var(--surface)",
-                  border: `1px solid ${issue.severity === "critical" ? "rgba(239,68,68,0.3)" : "rgba(245,158,11,0.3)"}`,
-                  borderRadius: "var(--radius-md)",
-                  padding: "18px 20px",
-                  boxShadow: "0 2px 10px rgba(0,0,0,0.12)"
-                }}
-              >
-                {/* Header row */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 8,
-                      background: issue.severity === "critical" ? "rgba(239,68,68,0.15)" : "rgba(245,158,11,0.15)",
-                      display: "grid",
-                      placeItems: "center",
-                      color: issue.color
-                    }}>
-                      <Icon size={18} />
-                    </div>
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{
-                          padding: "2px 7px",
-                          borderRadius: 4,
-                          fontSize: 10.5,
-                          fontWeight: 700,
-                          background: issue.severity === "critical" ? "rgba(239,68,68,0.2)" : "rgba(245,158,11,0.2)",
-                          color: issue.severity === "critical" ? "var(--red)" : "var(--amber)"
-                        }}>
-                          {issue.severity.toUpperCase()} ALERT
-                        </span>
-                        <strong style={{ fontSize: 14.5, color: "var(--text)" }}>
-                          {issue.paramName}: {issue.currentValue}
-                        </strong>
-                        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                          (Threshold: {issue.limitStr})
-                        </span>
-                      </div>
-                      <div style={{ fontSize: 11.5, color: "var(--text-secondary)", marginTop: 2 }}>
-                        Diagnosed Issue: <strong>{sc.title}</strong> (Scenario {issue.currentIndex} of {issue.totalScenarios})
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Button to cycle to next scenario for this reading */}
-                  <button
-                    onClick={() => cycleScenario(issue.conditionKey)}
-                    className="btn btn-secondary btn-sm"
-                    style={{ fontSize: 11, padding: "5px 10px", display: "flex", alignItems: "center", gap: 5 }}
-                    title="Generate alternate cause and matching treatment"
-                  >
-                    <RefreshCw size={12} /> Alternate Cause ({issue.currentIndex}/{issue.totalScenarios})
-                  </button>
+      {/* Assessment Summary */}
+      {latest && (
+        <div className="assessment-summary-card">
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: "var(--text-muted)", marginBottom: 8 }}>
+            Assessment Summary
+          </div>
+          <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }}>
+            Classification: <strong style={{ color: latest.quality === "GOOD" ? "var(--green)" : "var(--red)" }}>
+              {latest.quality}
+            </strong>
+            {" "}·{" "}
+            {latest.quality === "GOOD"
+              ? "No configured threshold violations detected in the available readings."
+              : (latest.reasons || []).filter(r => !r.startsWith("Note:")).join(" ")}
+          </div>
+          <div className="assessment-metrics">
+            {summaryMetrics.map(m => (
+              <div key={m.label} className="assessment-metric">
+                <div className="assessment-metric-label">{m.label}</div>
+                <div className={`assessment-metric-value ${m.failed ? "fail" : m.value !== "--" ? "pass" : ""}`}>
+                  {m.value}
                 </div>
-
-                {/* 3 Matched Direct Cards (Cause -> Exact Solution -> Targeted Prevention) */}
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                  gap: 14
-                }}>
-                  {/* 1. Diagnosed Cause / Source */}
-                  <div style={{
-                    background: "var(--surface2)",
-                    borderRadius: 8,
-                    padding: "14px",
-                    borderLeft: "3px solid var(--red)"
-                  }}>
-                    <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--red)", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
-                      🔍 IDENTIFIED SOURCE / CAUSE
-                    </div>
-                    <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.5, fontWeight: 600, marginBottom: 8 }}>
-                      {sc.source}
-                    </div>
-                    <div style={{ fontSize: 11.5, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                      <strong>Impact:</strong> {sc.impact}
-                    </div>
-                  </div>
-
-                  {/* 2. Specific Corrective Solution */}
-                  <div style={{
-                    background: "var(--surface2)",
-                    borderRadius: 8,
-                    padding: "14px",
-                    borderLeft: "3px solid var(--cyan)"
-                  }}>
-                    <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--cyan)", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
-                      ⚡ HOW TO SOLVE CURRENT ISSUE
-                    </div>
-                    <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.5, fontWeight: 600 }}>
-                      {sc.solution}
-                    </div>
-                  </div>
-
-                  {/* 3. Targeted Preventive Measure */}
-                  <div style={{
-                    background: "var(--surface2)",
-                    borderRadius: 8,
-                    padding: "14px",
-                    borderLeft: "3px solid var(--green)"
-                  }}>
-                    <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--green)", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
-                      🛡️ PREVENTIVE MEASURE
-                    </div>
-                    <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                      {sc.prevention}
-                    </div>
-                  </div>
-                </div>
+                <div style={{ fontSize: 9.5, color: "var(--text-muted)", marginTop: 2 }}>{m.limit}</div>
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
-      ) : (
+      )}
+
+      {/* No data state */}
+      {!latest && (
         <div style={{
-          background: "rgba(16, 185, 129, 0.06)",
-          border: "1px solid rgba(16, 185, 129, 0.22)",
+          background: "var(--surface2)",
+          border: "1px solid var(--border)",
           borderRadius: "var(--radius-md)",
-          padding: "18px 20px",
-          marginBottom: 20,
+          padding: "16px 18px",
+          marginBottom: 14,
           display: "flex",
           alignItems: "center",
-          gap: 16
+          gap: 12,
         }}>
-          <ShieldCheck size={36} color="var(--green)" style={{ flexShrink: 0 }} />
+          <Info size={22} color="var(--text-muted)" />
+          <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+            No sensor readings available yet. Recommendations will appear once the system receives data from the ESP32.
+          </div>
+        </div>
+      )}
+
+      {/* All clear */}
+      {latest && !recommendations.length && (
+        <div style={{
+          background: "rgba(40,125,90,0.06)",
+          border: "1px solid rgba(40,125,90,0.2)",
+          borderRadius: "var(--radius-md)",
+          padding: "14px 18px",
+          marginBottom: 14,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+        }}>
+          <ShieldCheck size={24} color="var(--green)" style={{ flexShrink: 0 }} />
           <div>
-            <div style={{ fontSize: 14.5, fontWeight: 700, color: "var(--green)", marginBottom: 3 }}>
-              Water Meets All Safe Thresholds
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--green)", marginBottom: 2 }}>
+              No Threshold Violations Detected
             </div>
-            <div style={{ fontSize: 12.5, color: "var(--text-secondary)", lineHeight: 1.6 }}>
-              All 4 live sensor readings (pH, Turbidity, EC, Temperature) are currently in optimal condition.
-              Should any parameter exceed its alarm limit, the system will instantly identify the probable cause and provide a targeted solution right here.
+            <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.6 }}>
+              pH, turbidity, and EC are all within their configured project limits. Continue monitoring.
             </div>
           </div>
         </div>
       )}
 
-      {/* SECTION 2: ADVISORY KNOWLEDGE EXPLORER (Available in full-page mode or on demand) */}
+      {/* Recommendation cards */}
+      {recommendations.map(rec => {
+        const Icon = rec.icon;
+        const cfg = PRIORITY_CONFIG[rec.priority];
+        const iconColors = {
+          critical:      { bg: "rgba(185,56,56,0.1)",   color: "var(--red)" },
+          attention:     { bg: "rgba(183,121,31,0.1)",  color: "var(--amber)" },
+          informational: { bg: "rgba(23,107,104,0.1)",  color: "var(--brand)" },
+        };
+        const ic = iconColors[rec.priority];
+
+        return (
+          <div key={rec.id} className={`recommendation-card ${cfg.cardClass}`}>
+            <div className="recommendation-header">
+              <div
+                className="recommendation-icon"
+                style={{ background: ic.bg, color: ic.color }}
+              >
+                <Icon size={15} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div className="recommendation-title">{rec.title}</div>
+                <div className="recommendation-subtitle">{rec.subtitle}</div>
+              </div>
+              <span className={`priority-badge ${cfg.badgeClass}`}>
+                {cfg.label}
+              </span>
+            </div>
+
+            <p className="recommendation-body">{rec.body}</p>
+
+            <ul className="recommendation-steps">
+              {rec.steps.map((step, i) => (
+                <li key={i} className="recommendation-step">
+                  <span className="step-bullet">{i + 1}</span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="recommendation-rationale">
+              <div className="rationale-label">Assessment Rationale</div>
+              {rec.rationale}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Footer note */}
       <div style={{
+        marginTop: 12,
+        padding: "8px 12px",
         background: "var(--surface2)",
         border: "1px solid var(--border)",
         borderRadius: "var(--radius-sm)",
-        padding: "14px 18px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        flexWrap: "wrap",
-        gap: 10
+        fontSize: 11,
+        color: "var(--text-muted)",
+        lineHeight: 1.6,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Lightbulb size={16} color="var(--amber)" />
-          <span style={{ fontSize: 12.5, color: "var(--text-secondary)" }}>
-            Tip: Click <strong>"Alternate Cause"</strong> on any alert card to toggle between industrial, natural, and agricultural diagnostic scenarios.
-          </span>
-        </div>
-        <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
-          Active Reference: WHO Guidelines for Drinking-water Quality (4th Ed.)
-        </div>
+        <strong>Note:</strong> Recommendations are based solely on readings from the connected sensor array and configured project thresholds.
+        Verify sensor calibration before acting on this assessment. Do not use this system as the sole basis for drinking-water safety decisions.
       </div>
     </div>
   );

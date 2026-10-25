@@ -1,32 +1,24 @@
 import React, { useState, useEffect, useCallback } from "react";
 import "./styles/index.css";
 
-import Header    from "./components/Header";
-import Sidebar   from "./components/Sidebar";
-import Dashboard from "./pages/Dashboard";
-import Settings  from "./pages/Settings";
-import SensorCharts  from "./components/SensorCharts";
-import AlertsPanel   from "./components/AlertsPanel";
-import MLInsights    from "./components/MLInsights";
-import SystemHealth  from "./components/SystemHealth";
+import Header          from "./components/Header";
+import Sidebar         from "./components/Sidebar";
+import Dashboard       from "./pages/Dashboard";
+import SensorCharts    from "./components/SensorCharts";
+import AlertsPanel     from "./components/AlertsPanel";
 import WaterDiagnostics from "./components/WaterDiagnostics";
 
 import { useAquaData } from "./hooks/useAquaData";
 
-// Page title labels
 const PAGE_TITLES = {
-  dashboard:   "Dashboard",
+  dashboard:   "Live Dashboard",
   charts:      "Sensor Trends",
   diagnostics: "Remediation & Advisory",
-  alerts:      "Alerts",
-  readings:    "Readings Table",
-  ml:          "ML Insights",
-  health:      "System Health",
-  settings:    "Settings",
+  alerts:      "Alerts & Status",
 };
 
 export default function App() {
-  // ── Theme ────────────────────────────────────────────────────
+  // ── Theme ───────────────────────────────────────────────────────
   const [theme, setTheme] = useState(() =>
     localStorage.getItem("aq-theme") || "dark"
   );
@@ -36,22 +28,21 @@ export default function App() {
     localStorage.setItem("aq-theme", theme);
   }, [theme]);
 
-  // ── Demo mode ────────────────────────────────────────────────
+  // ── Demo mode ────────────────────────────────────────────────────
   const [demoMode, setDemoMode] = useState(false);
 
-  // ── Data ─────────────────────────────────────────────────────
+  // ── Data ─────────────────────────────────────────────────────────
   const { data, health, loading, error, lastRefresh, refresh } = useAquaData(demoMode);
 
-  // ── Navigation ───────────────────────────────────────────────
-  const [activePage, setActivePage] = useState("dashboard");
+  // ── Navigation ───────────────────────────────────────────────────
+  const [activePage, setActivePage]   = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const navigate = useCallback((page) => {
     setActivePage(page);
-    setSidebarOpen(false);          // Close sidebar on mobile after nav
+    setSidebarOpen(false);
   }, []);
 
-  // Close sidebar when clicking outside on mobile
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (!e.target.closest(".app-sidebar") && !e.target.closest("#hamburger-btn")) {
@@ -62,7 +53,7 @@ export default function App() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ── Refreshing state for header spinner ───────────────────────
+  // ── Refresh spinner ───────────────────────────────────────────────
   const [refreshing, setRefreshing] = useState(false);
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -70,14 +61,9 @@ export default function App() {
     setRefreshing(false);
   };
 
-  // ── Demo banner text ─────────────────────────────────────────
   const isDemoData = data?.isDemo;
 
-  // ── Render page content ───────────────────────────────────────
-  const commonProps = {
-    data, health, loading, error, lastRefresh,
-    onRefresh: handleRefresh,
-  };
+  const commonProps = { data, health, loading, error, lastRefresh, onRefresh: handleRefresh };
 
   function renderPage() {
     switch (activePage) {
@@ -87,7 +73,13 @@ export default function App() {
       case "charts":
         return (
           <div>
-            <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 20 }}>Sensor Trends</h1>
+            <div className="page-heading">
+              <div className="page-title">
+                <span className="page-title-dot" />
+                Sensor Trends
+              </div>
+              <div className="page-subtitle">Historical readings from the connected sensor array</div>
+            </div>
             <SensorCharts
               history={data?.history}
               thresholds={data?.thresholds}
@@ -99,9 +91,13 @@ export default function App() {
       case "diagnostics":
         return (
           <div>
-            <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 20 }}>
-              Water Remediation & Advisory
-            </h1>
+            <div className="page-heading">
+              <div className="page-title">
+                <span className="page-title-dot" />
+                Remediation & Advisory
+              </div>
+              <div className="page-subtitle">Action recommendations derived from current sensor readings and thresholds</div>
+            </div>
             <WaterDiagnostics
               latest={data?.latest}
               thresholds={data?.thresholds}
@@ -113,7 +109,13 @@ export default function App() {
       case "alerts":
         return (
           <div>
-            <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 20 }}>Alerts</h1>
+            <div className="page-heading">
+              <div className="page-title">
+                <span className="page-title-dot" />
+                Alerts & Status
+              </div>
+              <div className="page-subtitle">Threshold-based status checks for pH, Turbidity, EC, and Temperature</div>
+            </div>
             <AlertsPanel
               latest={data?.latest}
               thresholds={data?.thresholds}
@@ -123,33 +125,6 @@ export default function App() {
             />
           </div>
         );
-
-      case "readings":
-        return (
-          <div>
-            <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 20 }}>Readings Table</h1>
-            <ReadingsTable history={data?.history} loading={loading} />
-          </div>
-        );
-
-      case "ml":
-        return (
-          <div>
-            <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 20 }}>ML Insights</h1>
-            <MLInsights data={data} onRetrainSuccess={handleRefresh} />
-          </div>
-        );
-
-      case "health":
-        return (
-          <div>
-            <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 20 }}>System Health</h1>
-            <SystemHealth data={data} health={health} lastRefresh={lastRefresh} loading={loading} />
-          </div>
-        );
-
-      case "settings":
-        return <Settings data={data} />;
 
       default:
         return <Dashboard {...commonProps} />;
@@ -178,29 +153,29 @@ export default function App() {
       />
 
       <main className="app-main" role="main" aria-label={PAGE_TITLES[activePage]}>
-        {/* Demo mode banner */}
         {isDemoData && (
           <div className="demo-banner" role="status">
-            🧪 <strong>DEMO MODE</strong> — All data is entirely simulated.
+            🧪 <strong>DEMO MODE</strong> — All data is simulated.
             No real sensor readings are shown. Click "Exit Demo" in the header to return to live data.
           </div>
         )}
 
         {renderPage()}
 
-        {/* Footer */}
         <footer style={{
-          marginTop: 40,
-          paddingTop: 20,
+          marginTop: 48,
+          paddingTop: 22,
           borderTop: "1px solid var(--border)",
           textAlign: "center",
-          fontSize: 11,
-          color: "var(--text-muted)",
-          lineHeight: 2,
+          fontSize: 10.5,
+          color: "var(--text3)",
+          lineHeight: 2.2,
+          fontFamily: "JetBrains Mono, monospace",
         }}>
-          AquaSense — Smart Water Quality Monitoring System · ESP32 + ThingSpeak + Random Forest<br />
-          GOOD/BAD classification reflects configured project thresholds only, not certified drinking-water safety.<br />
-          ML model is trained on synthetic data. Reported accuracy is for simulated evaluation only.
+          AquaSense · ESP32 + ThingSpeak + Flask · Smart Water Quality Monitoring<br />
+          <span style={{ opacity: 0.6 }}>
+            Assessments reflect configured project thresholds only — not a certified drinking-water safety evaluation.
+          </span>
         </footer>
       </main>
     </div>
